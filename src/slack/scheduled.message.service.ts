@@ -17,6 +17,7 @@ export class ScheduledMessageService {
   private db = Database.getInstance().db;
   private slackService = new SlackService();
   private scheduledJobs: Map<number, any> = new Map();
+  private isProcessing = false; // Add processing lock
 
   constructor() {
     this.initializeScheduler();
@@ -105,36 +106,77 @@ export class ScheduledMessageService {
   }
 
   private async processPendingMessages(): Promise<void> {
+    // Prevent multiple processing runs simultaneously
+    if (this.isProcessing) {
+      console.log('Already processing messages, skipping this cycle');
+      return;
+    }
+
+    this.isProcessing = true;
     const currentTime = Date.now();
     
-    this.db.all(
-      'SELECT * FROM scheduled_messages WHERE status = "pending" AND scheduled_time <= ?',
-      [currentTime],
-      async (err, rows: ScheduledMessage[]) => {
-        if (err) {
-          console.error('Error fetching pending messages:', err);
-          return;
-        }
+    try {
+      this.db.all(
+        'SELECT * FROM scheduled_messages WHERE status = "pending" AND scheduled_time <= ?',
+        [currentTime],
+        async (err, rows: ScheduledMessage[]) => {
+          if (err) {
+            console.error('Error fetching pending messages:', err);
+            this.isProcessing = false;
+            return;
+          }
 
-        for (const message of rows) {
-          await this.sendScheduledMessage(message);
+          console.log(`Processing ${rows.length} pending messages`);
+
+          for (const message of rows) {
+            try {
+              await this.sendScheduledMessage(message);
+            } catch (error) {
+              console.error(`Error processing message ${message.id}:`, error);
+              // Continue with next message even if one fails
+            }
+          }
+          
+          this.isProcessing = false;
         }
-      }
-    );
+      );
+    } catch (error) {
+      console.error('Error in processPendingMessages:', error);
+      this.isProcessing = false;
+    }
   }
 
   private async sendScheduledMessage(message: ScheduledMessage): Promise<void> {
+    const messageId = message.id!;
+    
     try {
-      console.log(`Sending scheduled message ID: ${message.id}`);
+      console.log(`[${new Date().toISOString()}] Processing scheduled message ID: ${messageId}`);
       
-      // Attempt to join the channel first before sending the message
-      // The joinChannel method has been added to SlackService
+      // First, mark as processing to prevent duplicate sends
+      const updateResult = await new Promise<number>((resolve, reject) => {
+        this.db.run(
+          'UPDATE scheduled_messages SET status = "sending" WHERE id = ? AND status = "pending"',
+          [messageId],
+          function(err) {
+            if (err) reject(err);
+            else resolve(this.changes);
+          }
+        );
+      });
+
+      if (updateResult === 0) {
+        console.log(`Message ID ${messageId} was not updated (already processed or not pending)`);
+        return;
+      }
+
+      // Try to join the channel first
       try {
         await this.slackService.joinChannel(message.team_id, message.channel_id);
       } catch (joinError) {
-        console.log(`Warning: Couldn't join channel for message ID: ${message.id}, will try to send anyway.`);
+        console.log(`Warning: Couldn't join channel for message ID: ${messageId}`);
       }
       
+      // Send the message
       await this.slackService.sendMessage(
         message.team_id,
         message.channel_id,
@@ -142,25 +184,38 @@ export class ScheduledMessageService {
       );
 
       // Mark as sent
-      await this.updateMessageStatus(message.id!, 'sent');
-      console.log(`Successfully sent scheduled message ID: ${message.id}`);
+      await this.updateMessageStatus(messageId, 'sent');
+      console.log(`[${new Date().toISOString()}] Successfully sent scheduled message ID: ${messageId}`);
       
     } catch (error: any) {
-      console.error(`Failed to send scheduled message ID: ${message.id}`, error);
-      await this.updateMessageStatus(message.id!, 'failed');
+      console.error(`Failed to send scheduled message ID: ${messageId}`, error);
+      await this.updateMessageStatus(messageId, 'failed');
     }
   }
 
   private async updateMessageStatus(messageId: number, status: 'sent' | 'failed'): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.db.run(
-        'UPDATE scheduled_messages SET status = ? WHERE id = ?',
-        [status, messageId],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
+      const updateTime = new Date().toISOString();
+      let query = '';
+      let params: any[] = [];
+      
+      if (status === 'sent') {
+        query = 'UPDATE scheduled_messages SET status = ?, updated_at = ? WHERE id = ?';
+        params = [status, updateTime, messageId];
+      } else {
+        query = 'UPDATE scheduled_messages SET status = ?, updated_at = ? WHERE id = ?';
+        params = [status, updateTime, messageId];
+      }
+      
+      this.db.run(query, params, function(err) {
+        if (err) {
+          console.error(`Error updating message ${messageId} status to ${status}:`, err);
+          reject(err);
+        } else {
+          console.log(`Updated message ${messageId} status to ${status}`);
+          resolve();
         }
-      );
+      });
     });
   }
 }

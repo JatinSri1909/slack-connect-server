@@ -8,7 +8,7 @@ const slackService = new SlackService();
 router.get('/slack', (req, res) => {
   const clientId = process.env.SLACK_CLIENT_ID;
   const redirectUri = process.env.SLACK_REDIRECT_URI;
-  const scope = 'channels:read,chat:write,groups:read';
+  const scope = 'channels:read,chat:write,groups:read,channels:join';
   
   const authUrl = `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scope}&redirect_uri=${encodeURIComponent(redirectUri!)}`;
   

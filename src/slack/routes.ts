@@ -1,6 +1,7 @@
 import express from 'express';
 import { SlackService } from './slack.service';
 import { ScheduledMessageService } from './scheduled.message.service';
+import { Database } from '../config/database';
 
 const router = express.Router();
 const slackService = new SlackService();
@@ -152,6 +153,45 @@ router.delete('/scheduled-messages/:messageId', async (req, res) => {
   } catch (error) {
     console.error('Error cancelling message:', error);
     res.status(500).json({ error: 'Failed to cancel message' });
+  }
+});
+
+// Database status endpoint (simple admin route)
+router.get('/db-status', async (req, res) => {
+  try {
+    const db = Database.getInstance().db;
+    
+    // Get basic stats
+    const tokenCount = await new Promise<number>((resolve, reject) => {
+      db.get('SELECT COUNT(*) as count FROM slack_tokens', (err, row: any) => {
+        if (err) reject(err);
+        else resolve(row.count);
+      });
+    });
+
+    const messageStats = await new Promise<any>((resolve, reject) => {
+      db.all('SELECT status, COUNT(*) as count FROM scheduled_messages GROUP BY status', (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+
+    res.json({
+      status: 'healthy',
+      database: {
+        connectedTeams: tokenCount,
+        messageStats: messageStats
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error checking database status:', error);
+    res.status(500).json({ 
+      status: 'error',
+      error: 'Failed to check database status',
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
