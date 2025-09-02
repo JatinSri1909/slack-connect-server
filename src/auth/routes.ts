@@ -55,3 +55,5 @@ router.get('/slack/callback', async (req, res) => {
     });
   }
 });
+
+export default router;
