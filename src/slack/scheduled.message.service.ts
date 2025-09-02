@@ -127,6 +127,14 @@ export class ScheduledMessageService {
     try {
       console.log(`Sending scheduled message ID: ${message.id}`);
       
+      // Attempt to join the channel first before sending the message
+      // The joinChannel method has been added to SlackService
+      try {
+        await this.slackService.joinChannel(message.team_id, message.channel_id);
+      } catch (joinError) {
+        console.log(`Warning: Couldn't join channel for message ID: ${message.id}, will try to send anyway.`);
+      }
+      
       await this.slackService.sendMessage(
         message.team_id,
         message.channel_id,
@@ -137,7 +145,7 @@ export class ScheduledMessageService {
       await this.updateMessageStatus(message.id!, 'sent');
       console.log(`Successfully sent scheduled message ID: ${message.id}`);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Failed to send scheduled message ID: ${message.id}`, error);
       await this.updateMessageStatus(message.id!, 'failed');
     }

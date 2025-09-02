@@ -37,9 +37,23 @@ router.post('/send-message', async (req, res) => {
     await slackService.sendMessage(teamId, channelId, message);
     res.json({ success: true, message: 'Message sent successfully' });
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending message:', error);
-    res.status(500).json({ error: 'Failed to send message' });
+    
+    // Check for Slack API specific errors
+    if (error.data?.error === 'not_in_channel') {
+      return res.status(400).json({
+        success: false,
+        error: 'not_in_channel',
+        message: 'The bot attempted to join but could not access this channel. For private channels, please add the bot manually using /invite @YourBotName in Slack.'
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      error: error.data?.error || 'unknown_error',
+      message: 'Failed to send message'
+    });
   }
 });
 
@@ -58,6 +72,14 @@ router.post('/schedule-message', async (req, res) => {
       return res.status(400).json({ error: 'Scheduled time must be in the future' });
     }
 
+    // Try to join the channel early to verify bot access
+    try {
+      await slackService.joinChannel(teamId, channelId);
+    } catch (joinError) {
+      console.log(`Warning: Could not pre-verify channel access for scheduling: ${channelId}`);
+      // We continue anyway as the join will be attempted again when the message is sent
+    }
+
     const messageId = await scheduledMessageService.scheduleMessage({
       team_id: teamId,
       channel_id: channelId,
@@ -69,12 +91,27 @@ router.post('/schedule-message', async (req, res) => {
     res.json({ 
       success: true, 
       messageId,
-      message: 'Message scheduled successfully' 
+      message: 'Message scheduled successfully',
+      warning: 'Remember, for private channels, please add the bot manually using /invite @YourBotName in Slack.'
     });
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error scheduling message:', error);
-    res.status(500).json({ error: 'Failed to schedule message' });
+    
+    // Check for Slack API specific errors
+    if (error.data?.error === 'not_in_channel') {
+      return res.status(400).json({
+        success: false,
+        error: 'not_in_channel',
+        message: 'The bot attempted to join but could not access this channel. For private channels, please add the bot manually using /invite @YourBotName in Slack.'
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      error: error.data?.error || 'unknown_error',
+      message: 'Failed to schedule message'
+    });
   }
 });
 

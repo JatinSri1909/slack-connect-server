@@ -41,6 +41,7 @@ export class Database {
         refresh_token TEXT,
         expires_at INTEGER,
         team_name TEXT,
+        bot_token TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
