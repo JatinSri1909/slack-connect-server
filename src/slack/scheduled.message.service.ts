@@ -16,8 +16,7 @@ interface ScheduledMessage {
 export class ScheduledMessageService {
   private db = Database.getInstance().db;
   private slackService = new SlackService();
-  private scheduledJobs: Map<number, any> = new Map();
-  private isProcessing = false; // Add processing lock
+  private isProcessing = false;
 
   constructor() {
     this.initializeScheduler();
@@ -198,16 +197,8 @@ private async sendScheduledMessage(message: ScheduledMessage): Promise<void> {
   private async updateMessageStatus(messageId: number, status: 'sent' | 'failed'): Promise<void> {
     return new Promise((resolve, reject) => {
       const updateTime = new Date().toISOString();
-      let query = '';
-      let params: any[] = [];
-      
-      if (status === 'sent') {
-        query = 'UPDATE scheduled_messages SET status = ?, updated_at = ? WHERE id = ?';
-        params = [status, updateTime, messageId];
-      } else {
-        query = 'UPDATE scheduled_messages SET status = ?, updated_at = ? WHERE id = ?';
-        params = [status, updateTime, messageId];
-      }
+      const query = 'UPDATE scheduled_messages SET status = ?, updated_at = ? WHERE id = ?';
+      const params = [status, updateTime, messageId];
       
       this.db.run(query, params, function(err) {
         if (err) {
