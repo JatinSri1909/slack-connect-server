@@ -41,6 +41,7 @@ export class Database {
         refresh_token TEXT,
         expires_at INTEGER,
         team_name TEXT,
+        bot_token TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -63,6 +64,7 @@ export class Database {
         scheduled_time INTEGER NOT NULL,
         status TEXT DEFAULT 'pending',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (team_id) REFERENCES slack_tokens (team_id)
       )
     `, (err) => {
@@ -70,6 +72,24 @@ export class Database {
         console.error('Error creating scheduled_messages table:', err);
       } else {
         console.log('✓ scheduled_messages table ready');
+        // Check if updated_at column exists and add it if it doesn't
+        this.db.all("PRAGMA table_info(scheduled_messages)", (pragmaErr, columns: any[]) => {
+          if (pragmaErr) {
+            console.error('Error checking table columns:', pragmaErr);
+            return;
+          }
+          
+          const hasUpdatedAt = columns.some(col => col.name === 'updated_at');
+          if (!hasUpdatedAt) {
+            this.db.run(`ALTER TABLE scheduled_messages ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP`, (alterErr) => {
+              if (alterErr) {
+                console.error('Error adding updated_at column:', alterErr);
+              } else {
+                console.log('✓ Added updated_at column to scheduled_messages');
+              }
+            });
+          }
+        });
         this.initialized = true;
       }
     });

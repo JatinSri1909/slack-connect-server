@@ -8,10 +8,29 @@ interface SlackToken {
   expires_at?: number;
   team_id: string;
   team_name: string;
+  bot_token?: string; // Added to store the bot token separately if available
 }
 
 export class SlackService {
   private db = Database.getInstance().db;
+
+  async getBotToken(teamId: string): Promise<string | null> {
+    try {
+      // Retrieve the token from storage
+      const tokenData = await this.getStoredToken(teamId);
+      
+      if (!tokenData) {
+        console.error('No token found for team:', teamId);
+        return null;
+      }
+      
+      // Return the bot token if available, otherwise use the access token
+      return tokenData.bot_token || tokenData.access_token;
+    } catch (error) {
+      console.error('Error getting bot token:', error);
+      return null;
+    }
+  }
 
   async exchangeCodeForToken(code: string): Promise<SlackToken> {
     try {
@@ -38,7 +57,8 @@ export class SlackService {
         refresh_token: data.refresh_token,
         expires_at: data.expires_in ? Date.now() + (data.expires_in * 1000) : undefined,
         team_id: data.team.id,
-        team_name: data.team.name
+        team_name: data.team.name,
+        bot_token: data.access_token // In OAuth v2, the access_token is the bot token
       };
 
       await this.storeToken(tokenData);
@@ -53,8 +73,8 @@ export class SlackService {
     return new Promise((resolve, reject) => {
       const query = `
         INSERT OR REPLACE INTO slack_tokens 
-        (team_id, access_token, refresh_token, expires_at, team_name, updated_at) 
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        (team_id, access_token, refresh_token, expires_at, team_name, bot_token, updated_at) 
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `;
       
       this.db.run(query, [
@@ -62,7 +82,8 @@ export class SlackService {
         tokenData.access_token,
         tokenData.refresh_token,
         tokenData.expires_at,
-        tokenData.team_name
+        tokenData.team_name,
+        tokenData.bot_token || tokenData.access_token // Use access token as fallback
       ], function(err) {
         if (err) reject(err);
         else resolve();
@@ -135,9 +156,9 @@ export class SlackService {
       
       this.db.run(
         `UPDATE slack_tokens 
-         SET access_token = ?, refresh_token = ?, expires_at = ?, updated_at = CURRENT_TIMESTAMP 
+         SET access_token = ?, refresh_token = ?, expires_at = ?, bot_token = ?, updated_at = CURRENT_TIMESTAMP 
          WHERE team_id = ?`,
-        [accessToken, refreshToken, expiresAt, teamId],
+        [accessToken, refreshToken, expiresAt, accessToken, teamId],
         (err) => {
           if (err) reject(err);
           else resolve();
@@ -162,18 +183,63 @@ export class SlackService {
     }
   }
 
-  async sendMessage(teamId: string, channelId: string, message: string): Promise<void> {
-    try {
-      const token = await this.getValidToken(teamId);
-      const client = new WebClient(token);
-      
-      await client.chat.postMessage({
-        channel: channelId,
-        text: message
-      });
-    } catch (error) {
-      console.error('Error sending message:', error);
-      throw error;
+  async joinChannel(teamId: string, channelId: string): Promise<{ joined: boolean; isPrivate: boolean; error?: string }> {
+  try {
+    const token = await this.getBotToken(teamId);
+    if (!token) {
+      return { joined: false, isPrivate: false, error: 'No bot token found' };
     }
+
+    const client = new WebClient(token);
+    
+    // First, get channel info to check if it's private
+    let isPrivate = false;
+    try {
+      const channelInfo = await client.conversations.info({ channel: channelId });
+      isPrivate = channelInfo.channel?.is_private || false;
+    } catch (infoError) {
+      console.log(`Could not get channel info for ${channelId}`);
+    }
+    
+    // Try to join the channel
+    await client.conversations.join({ channel: channelId });
+    console.log(`Successfully joined channel: ${channelId}`);
+    return { joined: true, isPrivate };
+    
+  } catch (error: any) {
+    console.log(`Could not join channel ${channelId}: ${error.message || 'Unknown error'}`);
+    
+    // Check if it's a private channel error
+    const isPrivateChannelError = error.data?.error === 'channel_not_found' || 
+                                 error.data?.error === 'not_in_channel' ||
+                                 error.data?.error === 'is_archived';
+    
+    return { 
+      joined: false, 
+      isPrivate: isPrivateChannelError,
+      error: error.data?.error || error.message 
+    };
   }
+}
+
+async sendMessage(teamId: string, channelId: string, message: string): Promise<void> {
+  try {
+    const token = await this.getValidToken(teamId);
+    const client = new WebClient(token);
+    
+    
+    await client.chat.postMessage({
+      channel: channelId,
+      text: message
+    });
+    
+  } catch (error: any) {
+    // Enhance error message for private channels
+    if (error.data?.error === 'not_in_channel') {
+      const enhancedError = new Error('Bot is not in the channel. For private channels, please add the bot manually using /invite @YourBotName in Slack.');
+      throw enhancedError;
+    }
+    throw error;
+  }
+}
 }
