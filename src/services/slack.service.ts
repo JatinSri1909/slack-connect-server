@@ -3,6 +3,7 @@ import { WebClient } from '@slack/web-api';
 import { Database } from '../config/database';
 import { SlackToken } from '../types';
 import { URIS, ERROR_MESSAGES, APP_CONSTANTS, SQL_QUERIES } from '../constants';
+import { SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_REDIRECT_URI } from '../config/envrioment';
 
 export class SlackService {
   private db = Database.getInstance().db;
@@ -31,12 +32,12 @@ export class SlackService {
         URIS.SLACK_OAUTH_ACCESS,
         null,
         {
-          params: {
-            client_id: process.env.SLACK_CLIENT_ID,
-            client_secret: process.env.SLACK_CLIENT_SECRET,
-            code: code,
-            redirect_uri: process.env.SLACK_REDIRECT_URI,
-          },
+                  params: {
+          client_id: SLACK_CLIENT_ID,
+          client_secret: SLACK_CLIENT_SECRET,
+          code: code,
+          redirect_uri: SLACK_REDIRECT_URI,
+        },
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
           },
@@ -130,8 +131,8 @@ export class SlackService {
         null,
         {
           params: {
-            client_id: process.env.SLACK_CLIENT_ID,
-            client_secret: process.env.SLACK_CLIENT_SECRET,
+            client_id: SLACK_CLIENT_ID,
+            client_secret: SLACK_CLIENT_SECRET,
             grant_type: 'refresh_token',
             refresh_token: refreshToken,
           },

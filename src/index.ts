@@ -1,22 +1,21 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import slackRoutes from './routes/slack.routes';
 import { Database } from './config/database';
 import { ScheduledMessageService } from './services/scheduled.message.service';
-import { APP_CONSTANTS, URIS, ERROR_MESSAGES, SUCCESS_MESSAGES } from './constants';
+import { URIS, ERROR_MESSAGES, SUCCESS_MESSAGES, APP_CONSTANTS } from './constants';
+import { env, PORT, CORS_ORIGIN } from './config/envrioment';
 
-// Load environment variables
-dotenv.config();
+// Validate environment variables
+env.validate();
 
 const app = express();
-const PORT = process.env.PORT || APP_CONSTANTS.DEFAULT_PORT;
 
 // Middleware
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || APP_CONSTANTS.DEFAULT_FRONTEND_URL,
+    origin: CORS_ORIGIN,
     credentials: true,
   }),
 );

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { SlackService } from '../services/slack.service';
 import { APP_CONSTANTS, URIS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants';
+import { getSlackAuthUrl } from '../config/envrioment';
 
 const slackService = new SlackService();
 
@@ -9,12 +10,7 @@ const slackService = new SlackService();
  */
 export const initiateSlackOAuth = (req: Request, res: Response): void => {
   try {
-    const clientId = process.env.SLACK_CLIENT_ID;
-    const redirectUri = `${process.env.FRONTEND_URL || APP_CONSTANTS.DEFAULT_FRONTEND_URL}${APP_CONSTANTS.OAUTH_CALLBACK_PATH}`;
-    const scope = APP_CONSTANTS.SLACK_SCOPE;
-
-    const authUrl = `${URIS.SLACK_OAUTH_AUTHORIZE}?client_id=${clientId}&scope=${scope}&redirect_uri=${encodeURIComponent(redirectUri)}`;
-
+    const authUrl = getSlackAuthUrl();
     res.json({ authUrl });
   } catch (error) {
     console.error('Error initiating OAuth flow:', error);
