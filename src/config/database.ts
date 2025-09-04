@@ -79,36 +79,27 @@ export class Database {
         } else {
           console.log('✓ scheduled_messages table ready');
           // Check if updated_at column exists and add it if it doesn't
-          this.db.all(
-            SQL_QUERIES.TABLE_INFO,
-            (pragmaErr, columns: any[]) => {
-              if (pragmaErr) {
-                console.error('Error checking table columns:', pragmaErr);
-                return;
-              }
+          this.db.all(SQL_QUERIES.TABLE_INFO, (pragmaErr, columns: any[]) => {
+            if (pragmaErr) {
+              console.error('Error checking table columns:', pragmaErr);
+              return;
+            }
 
-              const hasUpdatedAt = columns.some(
-                (col) => col.name === 'updated_at',
-              );
-              if (!hasUpdatedAt) {
-                this.db.run(
-                  SQL_QUERIES.ADD_UPDATED_AT_COLUMN,
-                  (alterErr) => {
-                    if (alterErr) {
-                      console.error(
-                        'Error adding updated_at column:',
-                        alterErr,
-                      );
-                    } else {
-                      console.log(
-                        '✓ Added updated_at column to scheduled_messages',
-                      );
-                    }
-                  },
-                );
-              }
-            },
-          );
+            const hasUpdatedAt = columns.some(
+              (col) => col.name === 'updated_at',
+            );
+            if (!hasUpdatedAt) {
+              this.db.run(SQL_QUERIES.ADD_UPDATED_AT_COLUMN, (alterErr) => {
+                if (alterErr) {
+                  console.error('Error adding updated_at column:', alterErr);
+                } else {
+                  console.log(
+                    '✓ Added updated_at column to scheduled_messages',
+                  );
+                }
+              });
+            }
+          });
           this.initialized = true;
         }
       },
@@ -122,7 +113,10 @@ export class Database {
         if (this.initialized) {
           resolve();
         } else {
-          setTimeout(checkInitialized, APP_CONSTANTS.INITIALIZATION_CHECK_INTERVAL);
+          setTimeout(
+            checkInitialized,
+            APP_CONSTANTS.INITIALIZATION_CHECK_INTERVAL,
+          );
         }
       };
       checkInitialized();
@@ -132,32 +126,28 @@ export class Database {
   // Method to verify tables exist
   public async verifyTables(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.db.all(
-        SQL_QUERIES.LIST_TABLES,
-        [],
-        (err, tables) => {
-          if (err) {
-            reject(err);
-            return;
-          }
+      this.db.all(SQL_QUERIES.LIST_TABLES, [], (err, tables) => {
+        if (err) {
+          reject(err);
+          return;
+        }
 
-          const tableNames = tables.map((table: any) => table.name);
-          console.log('Existing tables:', tableNames);
+        const tableNames = tables.map((table: any) => table.name);
+        console.log('Existing tables:', tableNames);
 
-          const requiredTables = APP_CONSTANTS.REQUIRED_TABLES;
-          const missingTables = requiredTables.filter(
-            (table) => !tableNames.includes(table),
-          );
+        const requiredTables = APP_CONSTANTS.REQUIRED_TABLES;
+        const missingTables = requiredTables.filter(
+          (table) => !tableNames.includes(table),
+        );
 
-          if (missingTables.length > 0) {
-            console.warn('Missing tables:', missingTables);
-            // Reinitialize tables
-            this.initializeTables();
-          }
+        if (missingTables.length > 0) {
+          console.warn('Missing tables:', missingTables);
+          // Reinitialize tables
+          this.initializeTables();
+        }
 
-          resolve();
-        },
-      );
+        resolve();
+      });
     });
   }
 }

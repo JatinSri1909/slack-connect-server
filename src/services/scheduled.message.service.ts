@@ -128,7 +128,9 @@ export class ScheduledMessageService {
         try {
           await this.sendScheduledMessage(message);
           // Add a small delay to prevent race conditions
-          await new Promise((resolve) => setTimeout(resolve, APP_CONSTANTS.MESSAGE_PROCESSING_DELAY));
+          await new Promise((resolve) =>
+            setTimeout(resolve, APP_CONSTANTS.MESSAGE_PROCESSING_DELAY),
+          );
         } catch (error) {
           console.error(`Error processing message ${message.id}:`, error);
         }
@@ -187,13 +189,19 @@ export class ScheduledMessageService {
       );
 
       // Mark as sent
-      await this.updateMessageStatus(messageId, APP_CONSTANTS.MESSAGE_STATUS.SENT);
+      await this.updateMessageStatus(
+        messageId,
+        APP_CONSTANTS.MESSAGE_STATUS.SENT,
+      );
       console.log(
         `[${new Date().toISOString()}] Successfully sent scheduled message ID: ${messageId}`,
       );
     } catch (error: any) {
       console.error(`Failed to send scheduled message ID: ${messageId}`, error);
-      await this.updateMessageStatus(messageId, APP_CONSTANTS.MESSAGE_STATUS.FAILED);
+      await this.updateMessageStatus(
+        messageId,
+        APP_CONSTANTS.MESSAGE_STATUS.FAILED,
+      );
     }
   }
 
@@ -205,18 +213,22 @@ export class ScheduledMessageService {
       const updateTime = new Date().toISOString();
       const params = [status, updateTime, messageId];
 
-      this.db.run(SQL_QUERIES.UPDATE_MESSAGE_FINAL_STATUS, params, function (err) {
-        if (err) {
-          console.error(
-            `Error updating message ${messageId} status to ${status}:`,
-            err,
-          );
-          reject(err);
-        } else {
-          console.log(`Updated message ${messageId} status to ${status}`);
-          resolve();
-        }
-      });
+      this.db.run(
+        SQL_QUERIES.UPDATE_MESSAGE_FINAL_STATUS,
+        params,
+        function (err) {
+          if (err) {
+            console.error(
+              `Error updating message ${messageId} status to ${status}:`,
+              err,
+            );
+            reject(err);
+          } else {
+            console.log(`Updated message ${messageId} status to ${status}`);
+            resolve();
+          }
+        },
+      );
     });
   }
 }

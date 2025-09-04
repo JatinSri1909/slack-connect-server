@@ -2,7 +2,12 @@ import { Request, Response } from 'express';
 import { SlackService } from '../services/slack.service';
 import { ScheduledMessageService } from '../services/scheduled.message.service';
 import { Database } from '../config/database';
-import { ERROR_MESSAGES, SUCCESS_MESSAGES, APP_CONSTANTS, SQL_QUERIES } from '../constants';
+import {
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+  APP_CONSTANTS,
+  SQL_QUERIES,
+} from '../constants';
 
 const slackService = new SlackService();
 const scheduledMessageService = new ScheduledMessageService();
@@ -10,7 +15,10 @@ const scheduledMessageService = new ScheduledMessageService();
 /**
  * Get channels for a team
  */
-export const getChannels = async (req: Request, res: Response): Promise<void> => {
+export const getChannels = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const { teamId } = req.params;
     const channels = await slackService.getChannels(teamId);
@@ -33,7 +41,10 @@ export const getChannels = async (req: Request, res: Response): Promise<void> =>
 /**
  * Send immediate message
  */
-export const sendMessage = async (req: Request, res: Response): Promise<void> => {
+export const sendMessage = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const { teamId, channelId, message } = req.body;
 
@@ -70,7 +81,10 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
 /**
  * Schedule a message
  */
-export const scheduleMessage = async (req: Request, res: Response): Promise<void> => {
+export const scheduleMessage = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const { teamId, channelId, channelName, message, scheduledTime } = req.body;
 
@@ -138,7 +152,10 @@ export const scheduleMessage = async (req: Request, res: Response): Promise<void
 /**
  * Get scheduled messages for a team
  */
-export const getScheduledMessages = async (req: Request, res: Response): Promise<void> => {
+export const getScheduledMessages = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const { teamId } = req.params;
     const messages = await scheduledMessageService.getScheduledMessages(teamId);
@@ -155,7 +172,10 @@ export const getScheduledMessages = async (req: Request, res: Response): Promise
 /**
  * Cancel scheduled message
  */
-export const cancelScheduledMessage = async (req: Request, res: Response): Promise<void> => {
+export const cancelScheduledMessage = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const { messageId } = req.params;
     const { teamId } = req.body;
@@ -190,7 +210,10 @@ export const cancelScheduledMessage = async (req: Request, res: Response): Promi
 /**
  * Get database status (admin endpoint)
  */
-export const getDatabaseStatus = async (req: Request, res: Response): Promise<void> => {
+export const getDatabaseStatus = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const db = Database.getInstance().db;
 

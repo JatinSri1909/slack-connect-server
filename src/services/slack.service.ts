@@ -3,7 +3,11 @@ import { WebClient } from '@slack/web-api';
 import { Database } from '../config/database';
 import { SlackToken } from '../types';
 import { URIS, ERROR_MESSAGES, APP_CONSTANTS, SQL_QUERIES } from '../constants';
-import { SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_REDIRECT_URI } from '../config/envrioment';
+import {
+  SLACK_CLIENT_ID,
+  SLACK_CLIENT_SECRET,
+  SLACK_REDIRECT_URI,
+} from '../config/envrioment';
 
 export class SlackService {
   private db = Database.getInstance().db;
@@ -28,21 +32,17 @@ export class SlackService {
 
   async exchangeCodeForToken(code: string): Promise<SlackToken> {
     try {
-      const response = await axios.post(
-        URIS.SLACK_OAUTH_ACCESS,
-        null,
-        {
-                  params: {
+      const response = await axios.post(URIS.SLACK_OAUTH_ACCESS, null, {
+        params: {
           client_id: SLACK_CLIENT_ID,
           client_secret: SLACK_CLIENT_SECRET,
           code: code,
           redirect_uri: SLACK_REDIRECT_URI,
         },
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-      );
+      });
 
       const data = response.data;
 
@@ -126,18 +126,14 @@ export class SlackService {
     refreshToken: string,
   ): Promise<string> {
     try {
-      const response = await axios.post(
-        URIS.SLACK_OAUTH_ACCESS,
-        null,
-        {
-          params: {
-            client_id: SLACK_CLIENT_ID,
-            client_secret: SLACK_CLIENT_SECRET,
-            grant_type: 'refresh_token',
-            refresh_token: refreshToken,
-          },
+      const response = await axios.post(URIS.SLACK_OAUTH_ACCESS, null, {
+        params: {
+          client_id: SLACK_CLIENT_ID,
+          client_secret: SLACK_CLIENT_SECRET,
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
         },
-      );
+      });
 
       const data = response.data;
 
@@ -203,7 +199,11 @@ export class SlackService {
     try {
       const token = await this.getBotToken(teamId);
       if (!token) {
-        return { joined: false, isPrivate: false, error: ERROR_MESSAGES.NO_BOT_TOKEN_FOUND };
+        return {
+          joined: false,
+          isPrivate: false,
+          error: ERROR_MESSAGES.NO_BOT_TOKEN_FOUND,
+        };
       }
 
       const client = new WebClient(token);

@@ -1,6 +1,9 @@
 import express from 'express';
 import { URIS } from '../constants';
-import { initiateSlackOAuth, handleSlackOAuthCallback } from '../controllers/auth.controllers';
+import {
+  initiateSlackOAuth,
+  handleSlackOAuthCallback,
+} from '../controllers/auth.controllers';
 
 const router = express.Router();
 

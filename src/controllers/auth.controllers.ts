@@ -1,6 +1,11 @@
 import { Request, Response } from 'express';
 import { SlackService } from '../services/slack.service';
-import { APP_CONSTANTS, URIS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants';
+import {
+  APP_CONSTANTS,
+  URIS,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+} from '../constants';
 import { getSlackAuthUrl } from '../config/envrioment';
 
 const slackService = new SlackService();
@@ -24,7 +29,10 @@ export const initiateSlackOAuth = (req: Request, res: Response): void => {
 /**
  * Handle OAuth callback from Slack
  */
-export const handleSlackOAuthCallback = async (req: Request, res: Response): Promise<void> => {
+export const handleSlackOAuthCallback = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const { code, error } = req.query;
 

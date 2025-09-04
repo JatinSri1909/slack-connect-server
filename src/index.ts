@@ -4,7 +4,12 @@ import authRoutes from './routes/auth.routes';
 import slackRoutes from './routes/slack.routes';
 import { Database } from './config/database';
 import { ScheduledMessageService } from './services/scheduled.message.service';
-import { URIS, ERROR_MESSAGES, SUCCESS_MESSAGES, APP_CONSTANTS } from './constants';
+import {
+  URIS,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+  APP_CONSTANTS,
+} from './constants';
 import { env, PORT, CORS_ORIGIN } from './config/envrioment';
 
 // Validate environment variables
@@ -46,8 +51,8 @@ app.use(
     next: express.NextFunction,
   ) => {
     console.error(err.stack);
-    res.status(APP_CONSTANTS.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ 
-      error: ERROR_MESSAGES.SOMETHING_WENT_WRONG 
+    res.status(APP_CONSTANTS.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      error: ERROR_MESSAGES.SOMETHING_WENT_WRONG,
     });
   },
 );
