@@ -12,6 +12,7 @@ export const SQL_QUERIES = {
       SET access_token = ?, refresh_token = ?, expires_at = ?, bot_token = ?, updated_at = CURRENT_TIMESTAMP 
       WHERE team_id = ?
     `,
+  DELETE_TOKEN_BY_TEAM: 'DELETE FROM slack_tokens WHERE team_id = ?',
 
   // Scheduled messages queries
   INSERT_SCHEDULED_MESSAGE: `

@@ -18,6 +18,9 @@ export const ERROR_MESSAGES = {
   TOKEN_EXPIRED_NO_REFRESH: 'Token expired and no refresh token available',
   SLACK_OAUTH_ERROR: 'Slack OAuth error',
   TOKEN_REFRESH_ERROR: 'Token refresh error',
+  TOKEN_REFRESH_FAILED: 'Token refresh failed - re-authentication required',
+  INVALID_REFRESH_TOKEN: 'Invalid refresh token - re-authentication required',
+  REAUTH_REQUIRED: 'Re-authentication required - please reconnect your Slack workspace',
   NO_BOT_TOKEN_FOUND: 'No bot token found',
   BOT_NOT_IN_CHANNEL:
     'Bot is not in the channel. For private channels, please add the bot manually using /invite @YourBotName in Slack.',

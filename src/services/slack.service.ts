@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { WebClient } from '@slack/web-api';
 import { Database } from '../config/database';
 import { SlackToken } from '../types';
@@ -8,6 +8,8 @@ import {
   SLACK_CLIENT_SECRET,
   SLACK_REDIRECT_URI,
 } from '../config/envrioment';
+import { RetryService } from './retry.service';
+import { ValidationService } from './validation.service';
 
 export class SlackService {
   private db = Database.getInstance().db;
@@ -138,6 +140,12 @@ export class SlackService {
       const data = response.data;
 
       if (!data.ok) {
+        // Handle specific refresh token errors
+        if (data.error === 'invalid_grant' || data.error === 'invalid_refresh_token') {
+          console.error(`Invalid refresh token for team ${teamId}: ${data.error}`);
+          await this.clearInvalidTokens(teamId);
+          throw new Error(ERROR_MESSAGES.INVALID_REFRESH_TOKEN);
+        }
         throw new Error(`${ERROR_MESSAGES.TOKEN_REFRESH_ERROR}: ${data.error}`);
       }
 
@@ -150,8 +158,15 @@ export class SlackService {
       );
 
       return data.access_token;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error refreshing token:', error);
+      
+      // If it's a network error or invalid grant, clear tokens
+      if (error.response?.status === 400 || error.message.includes('invalid_grant')) {
+        await this.clearInvalidTokens(teamId);
+        throw new Error(ERROR_MESSAGES.REAUTH_REQUIRED);
+      }
+      
       throw error;
     }
   }
@@ -176,13 +191,33 @@ export class SlackService {
     });
   }
 
+  private async clearInvalidTokens(teamId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        SQL_QUERIES.DELETE_TOKEN_BY_TEAM,
+        [teamId],
+        (err) => {
+          if (err) {
+            console.error(`Error clearing invalid tokens for team ${teamId}:`, err);
+            reject(err);
+          } else {
+            console.log(`Cleared invalid tokens for team ${teamId}`);
+            resolve();
+          }
+        },
+      );
+    });
+  }
+
   async getChannels(teamId: string): Promise<any[]> {
     try {
       const token = await this.getValidToken(teamId);
       const client = new WebClient(token);
 
-      const result = await client.conversations.list({
-        types: 'public_channel,private_channel',
+      const result = await RetryService.executeApiCallWithRetry(async () => {
+        return await client.conversations.list({
+          types: 'public_channel,private_channel',
+        });
       });
 
       return result.channels || [];
@@ -248,14 +283,53 @@ export class SlackService {
     message: string,
   ): Promise<void> {
     try {
+      // Validate inputs
+      if (!ValidationService.validateTeamId(teamId)) {
+        throw new Error('Invalid team ID format');
+      }
+
+      if (!ValidationService.validateChannelId(channelId)) {
+        throw new Error('Invalid channel ID format');
+      }
+
+      const messageValidation = ValidationService.validateAndSanitizeMessage(message);
+      if (!messageValidation.isValid) {
+        throw new Error(messageValidation.error);
+      }
+
+      const sanitizedMessage = messageValidation.sanitizedMessage!;
+
       const token = await this.getValidToken(teamId);
       const client = new WebClient(token);
 
-      await client.chat.postMessage({
-        channel: channelId,
-        text: message,
+      await RetryService.executeApiCallWithRetry(async () => {
+        return await client.chat.postMessage({
+          channel: channelId,
+          text: sanitizedMessage,
+        });
       });
     } catch (error: any) {
+      // Handle rate limiting specifically
+      if (error instanceof AxiosError && RetryService.isRateLimited(error)) {
+        const retryAfter = RetryService.getRetryAfterDelay(error);
+        if (retryAfter > 0) {
+          console.log(`Rate limited, waiting ${retryAfter}ms before retry`);
+          await new Promise(resolve => setTimeout(resolve, retryAfter));
+          // Retry once more after rate limit delay
+          try {
+            const token = await this.getValidToken(teamId);
+            const client = new WebClient(token);
+            await client.chat.postMessage({
+              channel: channelId,
+              text: message,
+            });
+            return;
+          } catch (retryError) {
+            throw retryError;
+          }
+        }
+      }
+
       // Enhance error message for private channels
       if (error.data?.error === APP_CONSTANTS.SLACK_ERRORS.NOT_IN_CHANNEL) {
         const enhancedError = new Error(ERROR_MESSAGES.BOT_NOT_IN_CHANNEL);

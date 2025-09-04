@@ -3,6 +3,7 @@ import { Database } from '../config/database';
 import { SlackService } from './slack.service';
 import { ScheduledMessage } from '../types';
 import { APP_CONSTANTS, SQL_QUERIES } from '../constants';
+import { RetryService } from './retry.service';
 
 export class ScheduledMessageService {
   private db = Database.getInstance().db;
@@ -150,16 +151,18 @@ export class ScheduledMessageService {
         `[${new Date().toISOString()}] Processing scheduled message ID: ${messageId}`,
       );
 
-      // Use atomic update with better status management
-      const updateResult = await new Promise<number>((resolve, reject) => {
-        this.db.run(
-          SQL_QUERIES.UPDATE_MESSAGE_PROCESSING,
-          [messageId],
-          function (err) {
-            if (err) reject(err);
-            else resolve(this.changes);
-          },
-        );
+      // Use atomic update with better status management and retry logic
+      const updateResult = await RetryService.executeDatabaseOperationWithRetry(async () => {
+        return new Promise<number>((resolve, reject) => {
+          this.db.run(
+            SQL_QUERIES.UPDATE_MESSAGE_PROCESSING,
+            [messageId],
+            function (err) {
+              if (err) reject(err);
+              else resolve(this.changes);
+            },
+          );
+        });
       });
 
       if (updateResult === 0) {
