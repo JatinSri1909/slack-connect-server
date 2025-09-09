@@ -1,8 +1,8 @@
 import axios, { AxiosError } from 'axios';
 import { WebClient } from '@slack/web-api';
-import { Database } from '../config/database';
 import { SlackToken } from '../types';
-import { URIS, ERROR_MESSAGES, APP_CONSTANTS, SQL_QUERIES } from '../constants';
+import { URIS, ERROR_MESSAGES, APP_CONSTANTS } from '../constants';
+import { getDatabaseAdapter, getQueries } from '../config/database-adapter';
 import {
   SLACK_CLIENT_ID,
   SLACK_CLIENT_SECRET,
@@ -12,7 +12,8 @@ import { RetryService } from './retry.service';
 import { ValidationService } from './validation.service';
 
 export class SlackService {
-  private db = Database.getInstance().db;
+  private db = getDatabaseAdapter();
+  private queries = getQueries();
 
   async getBotToken(teamId: string): Promise<string | null> {
     try {
@@ -72,23 +73,17 @@ export class SlackService {
   }
 
   private async storeToken(tokenData: SlackToken): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        SQL_QUERIES.INSERT_OR_REPLACE_TOKEN,
-        [
-          tokenData.team_id,
-          tokenData.access_token,
-          tokenData.refresh_token,
-          tokenData.expires_at,
-          tokenData.team_name,
-          tokenData.bot_token || tokenData.access_token, // Use access token as fallback
-        ],
-        function (err) {
-          if (err) reject(err);
-          else resolve();
-        },
-      );
-    });
+    await this.db.run(
+      this.queries.INSERT_OR_REPLACE_TOKEN,
+      [
+        tokenData.team_id,
+        tokenData.access_token,
+        tokenData.refresh_token,
+        tokenData.expires_at,
+        tokenData.team_name,
+        tokenData.bot_token || tokenData.access_token, // Use access token as fallback
+      ]
+    );
   }
 
   async getValidToken(teamId: string): Promise<string> {
@@ -111,16 +106,7 @@ export class SlackService {
   }
 
   private async getStoredToken(teamId: string): Promise<SlackToken | null> {
-    return new Promise((resolve, reject) => {
-      this.db.get(
-        SQL_QUERIES.SELECT_TOKEN_BY_TEAM,
-        [teamId],
-        (err, row: any) => {
-          if (err) reject(err);
-          else resolve(row || null);
-        },
-      );
-    });
+    return await this.db.get(this.queries.SELECT_TOKEN_BY_TEAM, [teamId]);
   }
 
   private async refreshToken(
@@ -177,36 +163,21 @@ export class SlackService {
     refreshToken?: string,
     expiresIn?: number,
   ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const expiresAt = expiresIn ? Date.now() + expiresIn * 1000 : null;
-
-      this.db.run(
-        SQL_QUERIES.UPDATE_TOKEN,
-        [accessToken, refreshToken, expiresAt, accessToken, teamId],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        },
-      );
-    });
+    const expiresAt = expiresIn ? Date.now() + expiresIn * 1000 : null;
+    await this.db.run(
+      this.queries.UPDATE_TOKEN,
+      [accessToken, refreshToken, expiresAt, accessToken, teamId]
+    );
   }
 
   private async clearInvalidTokens(teamId: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        SQL_QUERIES.DELETE_TOKEN_BY_TEAM,
-        [teamId],
-        (err) => {
-          if (err) {
-            console.error(`Error clearing invalid tokens for team ${teamId}:`, err);
-            reject(err);
-          } else {
-            console.log(`Cleared invalid tokens for team ${teamId}`);
-            resolve();
-          }
-        },
-      );
-    });
+    try {
+      await this.db.run(this.queries.DELETE_TOKEN_BY_TEAM, [teamId]);
+      console.log(`Cleared invalid tokens for team ${teamId}`);
+    } catch (err) {
+      console.error(`Error clearing invalid tokens for team ${teamId}:`, err);
+      throw err;
+    }
   }
 
   async getChannels(teamId: string): Promise<any[]> {

@@ -19,6 +19,7 @@ export interface EnvironmentConfig {
 
   // Database Configuration
   DATABASE_PATH: string;
+  POSTGRES_URL: string;
 
   // CORS Configuration
   CORS_ORIGIN: string;
@@ -52,6 +53,7 @@ class Environment {
 
       // Database Configuration
       DATABASE_PATH: process.env.DATABASE_PATH || './database.sqlite',
+      POSTGRES_URL: process.env.POSTGRES_URL || '',
 
       // CORS Configuration
       CORS_ORIGIN:
@@ -131,6 +133,7 @@ export const {
   SLACK_CLIENT_SECRET,
   SLACK_REDIRECT_URI,
   DATABASE_PATH,
+  POSTGRES_URL,
   CORS_ORIGIN,
   API_BASE_URL,
 } = env.getAll();
