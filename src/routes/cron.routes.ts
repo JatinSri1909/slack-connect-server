@@ -3,7 +3,7 @@ import { ScheduledMessageService } from '../services/scheduled.message.service';
 
 const router = express.Router();
 
-// Vercel cron job endpoint for processing scheduled messages
+// Manual trigger endpoint for immediate processing (for testing/external cron)
 router.get('/process-messages', async (req, res) => {
   try {
     console.log('Cron job triggered: Processing scheduled messages');
