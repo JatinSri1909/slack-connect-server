@@ -1,12 +1,13 @@
 import cron from 'node-cron';
-import { Database } from '../config/database';
 import { SlackService } from './slack.service';
 import { ScheduledMessage } from '../types';
-import { APP_CONSTANTS, SQL_QUERIES } from '../constants';
+import { APP_CONSTANTS } from '../constants';
+import { getDatabaseAdapter, getQueries } from '../config/database-adapter';
 import { RetryService } from './retry.service';
 
 export class ScheduledMessageService {
-  private db = Database.getInstance().db;
+  private db = getDatabaseAdapter();
+  private queries = getQueries();
   private slackService = new SlackService();
   private isProcessing = false;
 
@@ -25,81 +26,54 @@ export class ScheduledMessageService {
   async scheduleMessage(
     messageData: Omit<ScheduledMessage, 'id' | 'status' | 'created_at'>,
   ): Promise<number> {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        SQL_QUERIES.INSERT_SCHEDULED_MESSAGE,
-        [
-          messageData.team_id,
-          messageData.channel_id,
-          messageData.channel_name,
-          messageData.message,
-          messageData.scheduled_time,
-        ],
-        function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            console.log(`Scheduled message with ID: ${this.lastID}`);
-            resolve(this.lastID);
-          }
-        },
-      );
-    });
+    const result = await this.db.run(
+      this.queries.INSERT_SCHEDULED_MESSAGE,
+      [
+        messageData.team_id,
+        messageData.channel_id,
+        messageData.channel_name,
+        messageData.message,
+        messageData.scheduled_time,
+        'pending'
+      ]
+    );
+    console.log(`Scheduled message with ID: ${result.lastID}`);
+    return result.lastID || 0;
   }
 
   async getScheduledMessages(teamId: string): Promise<ScheduledMessage[]> {
-    return new Promise((resolve, reject) => {
-      this.db.all(
-        SQL_QUERIES.SELECT_PENDING_MESSAGES_BY_TEAM,
-        [teamId],
-        (err, rows: ScheduledMessage[]) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        },
-      );
-    });
+    return await this.db.all(this.queries.SELECT_PENDING_MESSAGES_BY_TEAM, [teamId]);
   }
 
   async cancelScheduledMessage(
     messageId: number,
     teamId: string,
   ): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        SQL_QUERIES.UPDATE_MESSAGE_STATUS,
-        [messageId, teamId],
-        function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            const success = this.changes > 0;
-            if (success) {
-              console.log(`Cancelled scheduled message with ID: ${messageId}`);
-            }
-            resolve(success);
-          }
-        },
-      );
-    });
+    const result = await this.db.run(
+      this.queries.UPDATE_MESSAGE_STATUS,
+      [messageId, teamId]
+    );
+    const success = result.changes > 0;
+    if (success) {
+      console.log(`Cancelled scheduled message with ID: ${messageId}`);
+    }
+    return success;
   }
 
   private async loadExistingScheduledMessages(): Promise<void> {
-    // Load all pending messages on startup
-    this.db.all(
-      SQL_QUERIES.SELECT_ALL_PENDING_MESSAGES,
-      [],
-      (err, rows: ScheduledMessage[]) => {
-        if (err) {
-          console.error('Error loading scheduled messages:', err);
-          return;
-        }
-
-        console.log(`Loaded ${rows.length} pending scheduled messages`);
-      },
-    );
+    try {
+      // Load all pending messages on startup
+      const rows = await this.db.all(
+        this.queries.SELECT_PENDING_MESSAGES_BY_TIME,
+        [Date.now()]
+      );
+      console.log(`Loaded ${rows.length} pending scheduled messages`);
+    } catch (err) {
+      console.error('Error loading scheduled messages:', err);
+    }
   }
 
-  private async processPendingMessages(): Promise<void> {
+  public async processPendingMessages(): Promise<void> {
     // Prevent multiple processing runs simultaneously
     if (this.isProcessing) {
       console.log('Already processing messages, skipping this cycle');
@@ -110,17 +84,11 @@ export class ScheduledMessageService {
     const currentTime = Date.now();
 
     try {
-      // Use a promise-based approach instead of callback
-      const rows = await new Promise<ScheduledMessage[]>((resolve, reject) => {
-        this.db.all(
-          SQL_QUERIES.SELECT_PENDING_MESSAGES_BY_TIME,
-          [currentTime],
-          (err, rows: ScheduledMessage[]) => {
-            if (err) reject(err);
-            else resolve(rows || []);
-          },
-        );
-      });
+      // Get pending messages that are due to be sent
+      const rows = await this.db.all(
+        this.queries.SELECT_PENDING_MESSAGES_BY_TIME,
+        [currentTime]
+      );
 
       console.log(`Processing ${rows.length} pending messages`);
 
@@ -153,16 +121,11 @@ export class ScheduledMessageService {
 
       // Use atomic update with better status management and retry logic
       const updateResult = await RetryService.executeDatabaseOperationWithRetry(async () => {
-        return new Promise<number>((resolve, reject) => {
-          this.db.run(
-            SQL_QUERIES.UPDATE_MESSAGE_PROCESSING,
-            [messageId],
-            function (err) {
-              if (err) reject(err);
-              else resolve(this.changes);
-            },
-          );
-        });
+        const result = await this.db.run(
+          this.queries.UPDATE_MESSAGE_PROCESSING,
+          [messageId]
+        );
+        return result.changes;
       });
 
       if (updateResult === 0) {
@@ -212,26 +175,18 @@ export class ScheduledMessageService {
     messageId: number,
     status: 'sent' | 'failed',
   ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const updateTime = new Date().toISOString();
-      const params = [status, updateTime, messageId];
-
-      this.db.run(
-        SQL_QUERIES.UPDATE_MESSAGE_FINAL_STATUS,
-        params,
-        function (err) {
-          if (err) {
-            console.error(
-              `Error updating message ${messageId} status to ${status}:`,
-              err,
-            );
-            reject(err);
-          } else {
-            console.log(`Updated message ${messageId} status to ${status}`);
-            resolve();
-          }
-        },
+    try {
+      await this.db.run(
+        this.queries.UPDATE_MESSAGE_FINAL_STATUS,
+        [status, messageId]
       );
-    });
+      console.log(`Updated message ${messageId} status to ${status}`);
+    } catch (err) {
+      console.error(
+        `Error updating message ${messageId} status to ${status}:`,
+        err,
+      );
+      throw err;
+    }
   }
 }
