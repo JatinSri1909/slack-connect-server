@@ -43,14 +43,24 @@ initializeDatabase().then(() => {
   // Initialize scheduled message service
   new ScheduledMessageService();
   
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Health check: http://localhost:${PORT}${URIS.HEALTH_CHECK}`);
-  });
+  // Only start the server in development mode
+  if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+      console.log(`Health check: http://localhost:${PORT}${URIS.HEALTH_CHECK}`);
+    });
+  } else {
+    console.log('Serverless function ready');
+  }
 }).catch((error) => {
   console.error('Failed to initialize database:', error);
-  process.exit(1);
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
 });
+
+// Export the app for Vercel
+export default app;
 
 // Routes
 app.use(URIS.API_AUTH, authRoutes);
