@@ -38,31 +38,7 @@ async function initializeDatabase() {
   }
 }
 
-// Initialize database and then start the server
-initializeDatabase().then(() => {
-  // Initialize scheduled message service
-  new ScheduledMessageService();
-  
-  // Only start the server in development mode
-  if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-      console.log(`Health check: http://localhost:${PORT}${URIS.HEALTH_CHECK}`);
-    });
-  } else {
-    console.log('Serverless function ready');
-  }
-}).catch((error) => {
-  console.error('Failed to initialize database:', error);
-  if (process.env.NODE_ENV !== 'production') {
-    process.exit(1);
-  }
-});
-
-// Export the app for Vercel
-export default app;
-
-// Routes
+// Routes (must be registered before export)
 app.use(URIS.API_AUTH, authRoutes);
 app.use(URIS.API_SLACK, slackRoutes);
 app.use('/api/cron', cronRoutes);
@@ -86,4 +62,28 @@ app.use(
     });
   },
 );
+
+// Initialize database and then start the server
+initializeDatabase().then(() => {
+  // Initialize scheduled message service
+  new ScheduledMessageService();
+  
+  // Only start the server in development mode
+  if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+      console.log(`Health check: http://localhost:${PORT}${URIS.HEALTH_CHECK}`);
+    });
+  } else {
+    console.log('Serverless function ready');
+  }
+}).catch((error) => {
+  console.error('Failed to initialize database:', error);
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+});
+
+// Export the app for Vercel
+export default app;
 
